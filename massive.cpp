@@ -1,94 +1,151 @@
-// massive.cpp — модуль "Массив" (строковый), интерфейс M_*
-//
-// Операции:
-//  - M_create(n, fill)         — создание нового массива (n элементов, заполненных fill; по умолчанию пустой)
-//  - M_load(file) / M_save(file) — загрузка/сохранение (по строке на элемент)
-//  - M_push(v)                 — добавление в конец
-//  - M_insert(idx, v)          — вставка по индексу (0..size), можно в конец
-//  - M_set(idx, v)             — замена по индексу
-//  - M_get(idx, out)           — получение по индексу
-//  - M_del(idx)                — удаление по индексу
-//  - M_len()                   — длина массива
-//  - M_print()                 — печать элементов в одну строку через пробел + '\n'
+// massive.cpp — собственная реализация массива строк под интерфейс M_*
+// Соответствует пункту: создание, добавление (по индексу и в конец),
+// получение по индексу, удаление по индексу, замена по индексу, длина, чтение/запись.
 
-#include <fstream>
+#include "ds_bind.h"
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
 #include <string>
-#include <vector>
 #include <iostream>
+#include <fstream>
 
-using std::string;
-using std::vector;
+using namespace std;
 
-static vector<string> gM;
+// ---------- внутренняя структура динамического массива ----------
+struct MArray {
+    char** data;     // массив указателей на C-строки
+    size_t size;     // фактическое число элементов
+    size_t capacity; // вместимость
+};
 
-// создание нового массива
-void M_create(size_t n = 0, const string& fill = "") {
-    gM.assign(n, fill);
+static MArray g_M { nullptr, 0, 0 }; // единый контейнер "Массив"
+
+// ---------- утилиты ----------
+static inline char* dup_cstr(const string& s) {
+    size_t n = s.size() + 1;
+    char* p = (char*)std::malloc(n);
+    if (p) std::memcpy(p, s.c_str(), n);
+    return p;
 }
 
-// загрузка: по одной строке на элемент
-bool M_load(const string& file) {
-    gM.clear();
-    std::ifstream f(file);
-    if (!f) return false;
-    string s;
-    while (std::getline(f, s)) gM.push_back(s);
-    return true;
+static inline void ensure_capacity(MArray& a, size_t need) {
+    if (a.capacity >= need) return;
+    size_t cap = a.capacity ? a.capacity : 1;
+    while (cap < need) cap <<= 1;
+    char** nd = (char**)std::realloc(a.data, cap * sizeof(char*));
+    if (!nd) return; // если не удалось — оставим как есть (операция выше проверит границы)
+    a.data = nd;
+    a.capacity = cap;
 }
 
-// сохранение: каждый элемент — отдельная строка
-bool M_save(const string& file) {
-    std::ofstream f(file);
-    if (!f) return false;
-    for (const auto& s : gM) f << s << '\n';
-    return true;
+static inline bool in_range(const MArray& a, size_t i) {
+    return i < a.size;
 }
 
-// длина массива
-size_t M_len() {
-    return gM.size();
+static inline void clear_array(MArray& a) {
+    for (size_t i = 0; i < a.size; ++i) std::free(a.data[i]);
+    std::free(a.data);
+    a.data = nullptr; a.size = 0; a.capacity = 0;
 }
 
-// добавление в конец
-void M_push(const string& v) {
-    gM.push_back(v);
-}
+// ---------- публичный интерфейс M_* (как в ds_bind.h) ----------
+size_t M_len() { return g_M.size; }
 
-// вставка по индексу (0..size) — true, если успешно
-bool M_insert(size_t index, const string& v) {
-    if (index > gM.size()) return false; // допускаем вставку в конец (index == size)
-    gM.insert(gM.begin() + static_cast<long>(index), v);
-    return true;
-}
-
-// замена по индексу — true, если успешно
-bool M_set(size_t index, const string& v) {
-    if (index >= gM.size()) return false;
-    gM[index] = v;
-    return true;
-}
-
-// получение по индексу — true, если успешно
-bool M_get(size_t index, string& out) {
-    if (index >= gM.size()) return false;
-    out = gM[index];
-    return true;
-}
-
-// удаление по индексу — true, если успешно
-bool M_del(size_t index) {
-    if (index >= gM.size()) return false;
-    gM.erase(gM.begin() + static_cast<long>(index));
-    return true;
-}
-
-// печать массива в одну строку
-void M_print() {
-    bool first = true;
-    for (const auto& s : gM) {
-        if (!first) std::cout << ' ';
-        std::cout << s;
-        first = false;
+void M_create(size_t n /*=0*/, const std::string& fill /*=""*/) {
+    clear_array(g_M);
+    if (n == 0) return;
+    ensure_capacity(g_M, n);
+    for (size_t i = 0; i < n; ++i) {
+        g_M.data[i] = dup_cstr(fill);
     }
-    std::cout << '\n';
+    g_M.size = n;
+}
+
+// загрузка из файла: по строке на элемент
+bool M_load(const std::string& file) {
+    if (file.empty()) return false;
+    ifstream fin(file);
+    if (!fin) return false;
+
+    // временный буфер
+    MArray temp { nullptr, 0, 0 };
+    string line;
+    while (std::getline(fin, line)) {
+        ensure_capacity(temp, temp.size + 1);
+        if (temp.capacity < temp.size + 1) { // не хватило памяти
+            clear_array(temp);
+            return false;
+        }
+        temp.data[temp.size++] = dup_cstr(line);
+    }
+    if (!fin.eof() && fin.fail()) { clear_array(temp); return false; }
+
+    clear_array(g_M);
+    g_M = temp;
+    return true;
+}
+
+// сохранение в файл: по одному элементу на строку
+bool M_save(const std::string& file) {
+    if (file.empty()) return false;
+    ofstream fout(file, ios::trunc);
+    if (!fout) return false;
+
+    for (size_t i = 0; i < g_M.size; ++i) {
+        fout << (g_M.data[i] ? g_M.data[i] : "") << '\n';
+        if (!fout) return false;
+    }
+    return true;
+}
+
+// добавить в конец
+void M_push(const std::string& v) {
+    ensure_capacity(g_M, g_M.size + 1);
+    if (g_M.capacity < g_M.size + 1) return; // out-of-memory — тихо игнорируем
+    g_M.data[g_M.size++] = dup_cstr(v);
+}
+
+// вставить по индексу (0..size)
+bool M_insert(size_t index, const std::string& v) {
+    if (index > g_M.size) return false;
+    ensure_capacity(g_M, g_M.size + 1);
+    if (g_M.capacity < g_M.size + 1) return false;
+    for (size_t i = g_M.size; i > index; --i) g_M.data[i] = g_M.data[i - 1];
+    g_M.data[index] = dup_cstr(v);
+    g_M.size++;
+    return true;
+}
+
+// заменить по индексу
+bool M_set(size_t index, const std::string& v) {
+    if (!in_range(g_M, index)) return false;
+    std::free(g_M.data[index]);
+    g_M.data[index] = dup_cstr(v);
+    return true;
+}
+
+// получить по индексу
+bool M_get(size_t index, std::string& out) {
+    if (!in_range(g_M, index)) return false;
+    out = g_M.data[index] ? g_M.data[index] : "";
+    return true;
+}
+
+// удалить по индексу
+bool M_del(size_t index) {
+    if (!in_range(g_M, index)) return false;
+    std::free(g_M.data[index]);
+    for (size_t i = index; i + 1 < g_M.size; ++i) g_M.data[i] = g_M.data[i + 1];
+    g_M.size--;
+    return true;
+}
+
+// печать
+void M_print() {
+    cout << "M.size = " << g_M.size << '\n';
+    if (g_M.size == 0) { cout << "  [пусто]\n"; return; }
+    for (size_t i = 0; i < g_M.size; ++i) {
+        cout << "  [" << i << "] " << (g_M.data[i] ? g_M.data[i] : "") << '\n';
+    }
 }
