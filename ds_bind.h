@@ -3,12 +3,17 @@
 #include <cstddef>
 
 // M: массив
-bool M_load(const std::string& file);
-bool M_save(const std::string& file);
-void M_push(const std::string& v);
-bool M_del (std::size_t index);
-bool M_get (std::size_t index, std::string& out);
-void M_print();
+std::size_t M_len();                                             
+void M_create(std::size_t n = 0, const std::string& fill = ""); 
+bool M_load(const std::string& file);            
+bool M_save(const std::string& file);                     
+void M_push(const std::string& v);                        
+bool M_insert(std::size_t index, const std::string& v);   
+bool M_set(std::size_t index, const std::string& v);      
+bool M_get(std::size_t index, std::string& out);          
+bool M_del(std::size_t index);                           
+void M_print();     
+
 
 // F: односвязный
 bool F_load(const std::string& file);
