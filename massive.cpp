@@ -1,7 +1,3 @@
-// massive.cpp — собственная реализация массива строк под интерфейс M_*
-// Соответствует пункту: создание, добавление (по индексу и в конец),
-// получение по индексу, удаление по индексу, замена по индексу, длина, чтение/запись.
-
 #include "ds_bind.h"
 #include <cstring>
 #include <cstdlib>
@@ -12,16 +8,14 @@
 
 using namespace std;
 
-// ---------- внутренняя структура динамического массива ----------
 struct MArray {
-    char** data;     // массив указателей на C-строки
-    size_t size;     // фактическое число элементов
-    size_t capacity; // вместимость
+    string data;     
+    size_t size;     
+    size_t capacity; 
 };
 
-static MArray g_M { nullptr, 0, 0 }; // единый контейнер "Массив"
+static MArray g_M { nullptr, 0, 0 }; 
 
-// ---------- утилиты ----------
 static inline char* dup_cstr(const string& s) {
     size_t n = s.size() + 1;
     char* p = (char*)std::malloc(n);
@@ -49,7 +43,6 @@ static inline void clear_array(MArray& a) {
     a.data = nullptr; a.size = 0; a.capacity = 0;
 }
 
-// ---------- публичный интерфейс M_* (как в ds_bind.h) ----------
 size_t M_len() { return g_M.size; }
 
 void M_create(size_t n /*=0*/, const std::string& fill /*=""*/) {
@@ -102,7 +95,7 @@ bool M_save(const std::string& file) {
 // добавить в конец
 void M_push(const std::string& v) {
     ensure_capacity(g_M, g_M.size + 1);
-    if (g_M.capacity < g_M.size + 1) return; // out-of-memory — тихо игнорируем
+    if (g_M.capacity < g_M.size + 1) return; 
     g_M.data[g_M.size++] = dup_cstr(v);
 }
 
