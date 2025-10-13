@@ -9,12 +9,13 @@
 using namespace std;
 
 struct MArray {
-    string data;     
-    size_t size;     
+    char** data;    
+    size_t size;  
     size_t capacity; 
 };
 
 static MArray g_M { nullptr, 0, 0 }; 
+
 
 static inline char* dup_cstr(const string& s) {
     size_t n = s.size() + 1;
@@ -28,7 +29,7 @@ static inline void ensure_capacity(MArray& a, size_t need) {
     size_t cap = a.capacity ? a.capacity : 1;
     while (cap < need) cap <<= 1;
     char** nd = (char**)std::realloc(a.data, cap * sizeof(char*));
-    if (!nd) return; // если не удалось — оставим как есть (операция выше проверит границы)
+    if (!nd) return;
     a.data = nd;
     a.capacity = cap;
 }
@@ -42,6 +43,7 @@ static inline void clear_array(MArray& a) {
     std::free(a.data);
     a.data = nullptr; a.size = 0; a.capacity = 0;
 }
+
 
 size_t M_len() { return g_M.size; }
 
@@ -95,7 +97,7 @@ bool M_save(const std::string& file) {
 // добавить в конец
 void M_push(const std::string& v) {
     ensure_capacity(g_M, g_M.size + 1);
-    if (g_M.capacity < g_M.size + 1) return; 
+    if (g_M.capacity < g_M.size + 1) return; // out-of-memory — тихо игнорируем
     g_M.data[g_M.size++] = dup_cstr(v);
 }
 
